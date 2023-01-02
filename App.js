@@ -1,56 +1,76 @@
 import {View, Text, TextInput, Button, Alert} from 'react-native';
 import React, {useState, useRef, useEffect} from 'react';
-
-const ws = new WebSocket('ws://192.168.31.37:8080');
+import * as RNFS from 'react-native-fs';
+import {jsonToCSV} from 'react-native-csv';
 
 export default function App() {
-  const [msgData, setMsg] = useState();
-  const [serverMsg, setServerMsg] = useState();
-  const [connectionStatus, setStatus] = useState();
+  const [msgData, setMsg] = useState(0);
+  const [msgData1, setMsg1] = useState(0);
+  const [msgDataArray, setMsgArray] = useState([]);
+  const [initData, setInitData] = useState(0);
+  const [mytime, setMytime] = useState(0);
+  const [recordState, setRecordState] = useState(false);
+
+  //   const interval = setInterval(() => {
+  //     console.log('This will be called every 2 seconds');
+  //     incrementFunc()
+  //   }, 1000);
 
   useEffect(() => {
-    const serverMessagesList = [];
+    let myInterval;
+    if (recordState) {
+      myInterval = setInterval(() => {
+        setMytime(prevTime => prevTime + 1);
+      }, 1000);
+    } else if (!recordState) {
+      clearInterval(myInterval);
+      setMytime(0)
+    }
+    return () => clearInterval(myInterval);
+  }, [recordState]);
 
-    ws.onopen = () => {
-      console.log('Connected to Server');
-      setStatus('Connected to Server');
-    };
-    ws.onclose = e => {
-      console.log('Disconnected. Check internet or server.');
-      setStatus(false);
-    };
-    ws.onerror = e => {
-      console.log(e.message);
-    };
-    ws.onmessage = e => {
-      console.log('Server Messages');
-      setServerMsg(e.data);
-    };
-  }, []);
+  useEffect(() => {
+    if (recordState) {
+      incrementFunc();
+    }
+  }, [mytime]);
 
-  const submitMessage = () => {
-    ws.send(`{"message":"${msgData}"}`);
-    setMsg('');
-  };
+  function incrementFunc() {
+    setMsg(msgData + 1);
+    setMsg1(msgData + 10);
+    setMsgArray([
+      ...msgDataArray,
+      `{"time": "${mytime}", "data": "${msgData}", "data1": "${msgData1}"}`,
+    ]);
+    console.log(msgDataArray[msgDataArray.length-1] + `${msgDataArray.length}`);
+    // setInitData(initData + 1);
+  }
 
-  const sendData = () => {
-    Alert.alert('Simple Button pressed');
+  const writeFile = () => {
+    var path = RNFS.ExternalDirectoryPath + `/data-running.txt`;
+    RNFS.writeFile(path, jsonToCSV(`[${msgDataArray}]`), 'utf8')
+      .then(() => {
+        setMsgArray([])
+        console.log('FILE WRITTEN!');
+        console.log(RNFS.ExternalDirectoryPath);
+      })
+      .catch(err => console.log(err.message));
   };
 
   return (
     <View>
-      <Text>Status: {connectionStatus}</Text>
-      <TextInput
-        style={{height: 40, margin: 12, borderWidth: 1, padding: 10}}
-        onChangeText={setMsg}
-        value={msgData}
-        placeholder="useless placeholder"
-        keyboardType="numeric"
-      />
+      <Text>Time Record: {mytime}</Text>
+      <Text>Data: {msgData}</Text>
+      <Text>Data 1: {msgData1}</Text>
 
-      <Button title="Press me" onPress={() => submitMessage()} />
+      <Button title="Press me" onPress={() => incrementFunc()} />
+      <Button title="Save File" onPress={() => writeFile()} />
 
-      <Text> Server Messages: {serverMsg}</Text>
+      {!recordState ? (
+        <Button title="Record" onPress={() => setRecordState(true)} />
+      ) : (
+        <Button title="Stop Record" onPress={() => setRecordState(false)} />
+      )}
     </View>
   );
 }
